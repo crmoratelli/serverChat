@@ -36,9 +36,11 @@ struct linkedlist_t *thread_list = NULL;
 
 char * recvMSG(int s, char *msg){
     int pos = 0;
-    msg[0] = 1;
-    while (msg[pos]){
+    while (1){
         recv(s, &msg[pos], 1, 0);
+        if(!msg[pos]){
+            break;
+        }
         pos++;
     }
     return msg;
@@ -54,6 +56,7 @@ struct client_data * lookforNickname(char* nickname, struct linkedlist_t *l){
 
     while(n){
         if(!strcmp(nickname, ((struct client_data*)(n->elem))->nickname)){
+            printf("%s %s\n", nickname, ((struct client_data*)(n->elem))->nickname);
             return n->elem;
         }
         n = n->next;
@@ -81,6 +84,10 @@ void send_to_all(struct linkedlist_t *l, char *msg){
         linkedlist_insert_tail(((struct client_data *)(n->elem))->msg_list, m);
         n = n->next;
     }
+}
+
+void print_msg(char *msg){
+    printf("%d %s\n", msg[0], &msg[1]);
 }
 
 int send_private(struct linkedlist_t *l, char *msg){
@@ -156,6 +163,7 @@ void * client_handle(void* cd){
     /* Client accepted, start chat. */
     while(running){
         recvMSG(client->sk, msg);
+        print_msg(msg);
         switch (msg[0]){
             case CODE_MESSAGE_PUBLIC:
                 send_to_all(thread_list, &msg[1]);
@@ -200,6 +208,11 @@ int main(int argc, char *argv[])
     struct client_data *cd;
     pthread_t thr;
 
+    if(argc < 2){
+        printf("Usage: %s <port number>", argv[0]);
+        exit(0);
+    }
+
     thread_list = linkedlist_create();
 
     /* Cria o Socket: SOCK_STREAM = TCP */
@@ -210,7 +223,7 @@ int main(int argc, char *argv[])
 	 * INADDR_ANY e ouvir na porta 5000 */ 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port = htons(5000); 
+    serv_addr.sin_port = htons(atoi(argv[1])); 
 
 	/* Associa o socket a estrutura sockaddr_in */
     bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)); 
@@ -225,9 +238,10 @@ int main(int argc, char *argv[])
         addrlen = sizeof(struct sockaddr_in);
         pthread_mutex_lock(&mutex_list);
         linkedlist_insert_tail(thread_list, cd);
-        pthread_mutex_lock(&mutex_list);
+        pthread_mutex_unlock(&mutex_list);
 
 		/* Aguarda a conexão */	
+        printf("Waiting for connection... ");
         cd->sk = accept(listenfd, (struct sockaddr*)cd->client_addr, (socklen_t*)&addrlen); 
 
         pthread_create(&thr, NULL, client_handle, (void *)cd);
