@@ -9,8 +9,10 @@
 #include <sys/types.h>
 #include <time.h> 
 #include <pthread.h>
+#include <sys/poll.h>
 #include "linkedlist.h"
 
+#define PUBLIC "(PUBLIC) - "
 #define NICKNAMESZ 32
 #define CODE_NICKNAME           100
 #define CODE_MESSAGE_PUBLIC     101  
@@ -76,18 +78,35 @@ void finish_client(struct linkedlist_t *l, struct client_data *c){
         fflush(stdout);
 }
 
-void send_to_all(struct linkedlist_t *l, char *msg){
+void send_to_all(struct linkedlist_t *l, char *nick_sender, char *msg){
+	int size = strnlen(msg, 512) + strlen(PUBLIC) + strlen(nick_sender) + strlen(": ");
+	pthread_mutex_lock(&mutex_list);
     struct linkedlist_node_t *n = l->first;
     while(n){
-        char *m = malloc(strnlen(msg, 512));
-        strncpy(m, msg, 512);
-        linkedlist_insert_tail(((struct client_data *)(n->elem))->msg_list, m);
+    	if(strcmp(nick_sender, ((struct client_data *)(n->elem))->nickname)){
+    		char *m = malloc(size);
+    		memset(m, 0, size);
+    		strcat(m, PUBLIC);
+    		strcat (m, nick_sender);
+    		strcat (m, ": ");
+    		strncat(m, msg, 512);
+        	linkedlist_insert_tail(((struct client_data *)(n->elem))->msg_list, m);
+        }
         n = n->next;
     }
+	pthread_mutex_unlock(&mutex_list);
 }
 
-void print_msg(char *msg){
-    printf("%d %s\n", msg[0], &msg[1]);
+void print_all_clients(struct linkedlist_t *l){
+	struct linkedlist_node_t *n = l->first;
+	while(n){
+		printf("%s -> %d\n", ((struct client_data *)n->elem)->nickname, ((struct client_data *)n->elem)->sk);
+		n = n->next;
+	}
+}
+
+void print_msg(char *n, char *msg){
+    printf("%s %d %s\n", n, msg[0], &msg[1]);
 }
 
 int send_private(struct linkedlist_t *l, char *msg){
@@ -112,7 +131,9 @@ int send_private(struct linkedlist_t *l, char *msg){
 
     m = malloc(strnlen(msg, 512));
     strncpy(m, msg, 512);
+    pthread_mutex_lock(&mutex_list);
     linkedlist_insert_tail(d->msg_list, m);
+    pthread_mutex_unlock(&mutex_list);
 
     return 0;
 }
@@ -121,6 +142,7 @@ void get_list(struct linkedlist_t *l, char *msg){
     struct linkedlist_node_t *n = l->first;
     msg[0] = 0;
 
+	pthread_mutex_lock(&mutex_list);
     while(n){
         strncat(msg, ((struct client_data *)(n->elem))->nickname, 32);
         n = n->next;
@@ -128,12 +150,20 @@ void get_list(struct linkedlist_t *l, char *msg){
             strcat(msg, "|");
         }
     }
+    pthread_mutex_unlock(&mutex_list);
 }
 
 void * client_handle(void* cd){
     struct client_data *client = (struct client_data *)cd;
     char msg[512];
     int running = 1;
+    struct pollfd fds[1];
+    int rc;
+
+    memset(fds, 0 , sizeof(fds));
+
+    fds[0].fd = client->sk;
+  	fds[0].events = POLLIN;
 
     client->msg_list = linkedlist_create();
 
@@ -160,38 +190,54 @@ void * client_handle(void* cd){
         }
     }
 
+    print_all_clients(thread_list);
+
     /* Client accepted, start chat. */
     while(running){
-        recvMSG(client->sk, msg);
-        print_msg(msg);
-        switch (msg[0]){
-            case CODE_MESSAGE_PUBLIC:
-                send_to_all(thread_list, &msg[1]);
-                break;
-            case CODE_MESSAGE_PRIVATE:
-                if(send_private(thread_list, &msg[1])){
-                    sendMSG(client->sk, CODE_SUCESS, "");
-                }else{
-                    sendMSG(client->sk, CODE_NICKNAME_NOT_FOUND, "");
-                }
-                break;
-            case CODE_DISCONNECT:
-                sendMSG(client->sk, CODE_SUCESS, "");
-                running = 0;
-                break;
-            case CODE_LIST_ALL:
-                get_list(thread_list, msg);
-                sendMSG(client->sk, CODE_NAME_LIST, msg);
-                break;
+
+    	 rc = poll(fds, 1, 1000);
+
+    	 printf("%s: %d\n", client->nickname, rc);
+
+   		if (rc < 0){
+      		perror("  poll() failed");
+      		continue;
+    	}else if (rc > 0){
+
+        	recvMSG(client->sk, msg);
+        	print_msg(client->nickname, msg);
+
+        	switch (msg[0]){
+            	case CODE_MESSAGE_PUBLIC:
+                	send_to_all(thread_list, client->nickname, &msg[1]);
+                	break;
+            	case CODE_MESSAGE_PRIVATE:
+                	if(send_private(thread_list, &msg[1])){
+                    	sendMSG(client->sk, CODE_SUCESS, "");
+                	}else{
+                    	sendMSG(client->sk, CODE_NICKNAME_NOT_FOUND, "");
+                	}
+                	break;
+            	case CODE_DISCONNECT:
+                	sendMSG(client->sk, CODE_SUCESS, "");
+                	running = 0;
+                	break;
+            	case CODE_LIST_ALL:
+                	get_list(thread_list, msg);
+                	sendMSG(client->sk, CODE_NAME_LIST, msg);
+                	break;
+        	}
         }
 
-        if(linkedlist_size(client->msg_list) > 0 && running){
-            while (linkedlist_size(client->msg_list) > 0){
-                char *m = linkedlist_remove_head(client->msg_list);
-                sendMSG(client->sk, CODE_CLIENT_MESSAGE, m);
-                free(m);
-            }
-        }
+       	while (running && linkedlist_size(client->msg_list) > 0){
+       		pthread_mutex_lock(&mutex_list);
+        	char *m = linkedlist_remove_head(client->msg_list);
+        	pthread_mutex_unlock(&mutex_list);
+          	sendMSG(client->sk, CODE_CLIENT_MESSAGE, m);
+          	print_msg(client->nickname, m);
+          	fflush(stdout);
+           	free(m);
+      	}
     }
 
     /* Fecha conexão com o cliente. */
@@ -236,13 +282,14 @@ int main(int argc, char *argv[])
         memset(cd, 0, sizeof(struct client_data));
         cd->client_addr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
         addrlen = sizeof(struct sockaddr_in);
-        pthread_mutex_lock(&mutex_list);
-        linkedlist_insert_tail(thread_list, cd);
-        pthread_mutex_unlock(&mutex_list);
 
 		/* Aguarda a conexão */	
         printf("Waiting for connection... ");
         cd->sk = accept(listenfd, (struct sockaddr*)cd->client_addr, (socklen_t*)&addrlen); 
+
+        pthread_mutex_lock(&mutex_list);
+        linkedlist_insert_tail(thread_list, cd);
+        pthread_mutex_unlock(&mutex_list);
 
         pthread_create(&thr, NULL, client_handle, (void *)cd);
         pthread_detach(thr);

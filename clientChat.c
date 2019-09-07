@@ -24,6 +24,11 @@
 #define CODE_CLIENT_MESSAGE     109
 #define CODE_KEEPALIVE          110
 
+#define OPTION_LIST_ALL			1
+#define OPTION_SEND_ALL			2
+#define OPTION_SEND_PRIVATE		3
+#define OPTION_DISCONNECT		4
+
 struct client_data{
     char nickname[32];
     int sk;
@@ -74,6 +79,14 @@ void * client_handle(void* cd){
     return NULL;
 }
 
+void print_options(){
+	printf("Option: "\n);
+	printf("\t1 - List all\n");
+	printf("\t2 - Send to all\n");
+	printf("\t3 - Send private\n");
+	printf("\t4 - Disconnect\n");
+	printf("Press option: ");
+}
 
 int main(int argc, char *argv[])
 {
@@ -81,22 +94,13 @@ int main(int argc, char *argv[])
     struct sockaddr_in serv_addr; 
     struct client_data *cd;
     pthread_t thr;
-    char nickname[32], msg[512];
-    char ip_dest[16] = "127.0.0.1", port[12];
+    char msg[512];
+    int op;
+    
 
-    /*printf("Enter Server IP : ");
-    fgets(ip_dest, sizeof(ip_dest), stdin);
-    ip_dest[strlen(ip_dest)-1] = 0;*/
-
-    printf("Enter Server Port : ");
-    fgets(port, sizeof(port), stdin);
-    port[strlen(port)-1] = 0;
-
-    printf("Enter Nickname : ");
-    fgets(nickname, sizeof(nickname), stdin);
-    nickname[strlen(nickname)-1] = 0;
-    printf("\n%s\n", nickname);
-
+    if (argv < 3){
+    	printf("Usage: %s <ip> <port> <nickname>\n");
+    }
 
     /*Cria o Socket */
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
@@ -107,9 +111,9 @@ int main(int argc, char *argv[])
     /* Configura o IP de destino e porta na estrutura sockaddr_in */
     memset(&serv_addr, 0, sizeof(serv_addr)); 
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(atoi(port)); 
+    serv_addr.sin_port = htons(atoi(argv[2])); 
 
-    if(inet_pton(AF_INET, ip_dest, &serv_addr.sin_addr)<=0){
+    if(inet_pton(AF_INET, argv[1], &serv_addr.sin_addr)<=0){
         printf("\n inet_pton error occured\n");
         return 1;
     } 
@@ -121,7 +125,7 @@ int main(int argc, char *argv[])
     } 
 
     printf("Sending nickname... \n");
-    sendMSG(sockfd, CODE_NICKNAME, nickname);
+    sendMSG(sockfd, CODE_NICKNAME, argv[3]);
     printf("Waiting response... \n");
     recvMSG(sockfd, msg);
     if(msg[0] != CODE_SUCESS){
@@ -131,12 +135,19 @@ int main(int argc, char *argv[])
     
     cd = (struct client_data *)malloc(sizeof(struct client_data));
     memset(cd, 0, sizeof(struct client_data));
-    strcpy(cd->nickname, nickname);
+    strcpy(cd->nickname, argv[3]);
     cd->sk = sockfd;
     pthread_create(&thr, NULL, client_handle, (void *)cd);
     pthread_detach(thr);
 
     while(strcmp(msg, "quit")){
+    	print_options();
+    	scanf("%d", &op);
+
+    	switch(op){
+
+    	}
+
         printf("Send a message: ");
         fgets(msg, sizeof(msg), stdin);
 

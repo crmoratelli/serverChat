@@ -65,6 +65,10 @@ void * linkedlist_remove_head(struct linkedlist_t *l){
 	e = n->elem;
 	l->first = n->next;
 
+	if(l->first == NULL){
+		l->last = NULL;
+	}
+
 	free(n);
 
 	l->size--;
