@@ -25,7 +25,7 @@
 #define CODE_KEEPALIVE          110
 
 #define OPTION_LIST_ALL			1
-#define OPTION_SEND_ALL			2
+#define OPTION_SEND_PUBLIC		2
 #define OPTION_SEND_PRIVATE		3
 #define OPTION_DISCONNECT		4
 
@@ -55,6 +55,7 @@ void * client_handle(void* cd){
     struct client_data *client = (struct client_data *)cd;
     char msg[512];
     int running = 1;
+    char *token;
 
     /* Client accepted, start chat. */
     while(running){
@@ -69,6 +70,16 @@ void * client_handle(void* cd){
                 break;
             case CODE_ERROR:
                 exit(0);
+            case CODE_NAME_LIST:
+				printf("Chat participants:\n");
+				token = strtok(&msg[1], "|");
+   				while( token != NULL ) {
+      				printf( " %s\n", token ); //printing each token
+      				token = strtok(NULL, "|");            	
+      			}
+      			break;
+      		case CODE_SUCESS;
+      			break;
             default:
                 printf("Message not recognized %d\n", msg[0]);
                 exit(0);
@@ -80,7 +91,7 @@ void * client_handle(void* cd){
 }
 
 void print_options(){
-	printf("Option: "\n);
+	printf("Option: \n");
 	printf("\t1 - List all\n");
 	printf("\t2 - Send to all\n");
 	printf("\t3 - Send private\n");
@@ -96,10 +107,9 @@ int main(int argc, char *argv[])
     pthread_t thr;
     char msg[512];
     int op;
-    char nick[32];
     
-    if (argv < 3){
-    	printf("Usage: %s <ip> <port> <nickname>\n");
+    if (argc < 4){
+    	printf("Usage: %s <ip> <port> <nickname>\n", argv[0]);
     }
 
     /*Cria o Socket */
@@ -143,25 +153,34 @@ int main(int argc, char *argv[])
     while(strcmp(msg, "quit")){
     	print_options();
     	scanf("%d", &op);
-
+    	getchar();
     	switch(op){
     		case OPTION_LIST_ALL:
     			sendMSG(sockfd, CODE_LIST_ALL, "");	
     			break;
-    		case OPTION_SEND_ALL:
+    		case OPTION_SEND_PUBLIC:
     			printf("Message: ");
     			fgets(msg, 512, stdin);
     			msg[strlen(msg)-1] = 0;
     			sendMSG(sockfd, CODE_MESSAGE_PUBLIC, msg);	
     			break;
-	    			printf("Message: ");
-    				fgets(msg, 512, stdin);
-    				msg[strlen(msg)-1] = 0;
+    		case OPTION_SEND_PRIVATE:
 
+	    		printf("Nickname: ");
+    			fgets(msg, 32, stdin);
+    			msg[strlen(msg)-1] = 0;
 
+    			strcat(msg, "|");
 
-    			CODE_MESSAGE_PRIVATE
+	    		printf("Message: ");
+    			fgets(&msg[strlen(msg)], 512, stdin);
+    			msg[strlen(msg)-1] = 0;
 
+    			sendMSG(sockfd, CODE_MESSAGE_PRIVATE, msg);	
+    			break;
+    		case OPTION_DISCONNECT:
+    			sendMSG(sockfd, CODE_DISCONNECT, "");	
+    			break;
     	}
 
         printf("Send a message: ");

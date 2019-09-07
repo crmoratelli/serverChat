@@ -80,6 +80,7 @@ void finish_client(struct linkedlist_t *l, struct client_data *c){
 
 void send_to_all(struct linkedlist_t *l, char *nick_sender, char *msg){
 	int size = strnlen(msg, 512) + strlen(PUBLIC) + strlen(nick_sender) + strlen(": ");
+	
 	pthread_mutex_lock(&mutex_list);
     struct linkedlist_node_t *n = l->first;
     while(n){
@@ -139,10 +140,10 @@ int send_private(struct linkedlist_t *l, char *msg){
 }
 
 void get_list(struct linkedlist_t *l, char *msg){
-    struct linkedlist_node_t *n = l->first;
     msg[0] = 0;
 
 	pthread_mutex_lock(&mutex_list);
+	struct linkedlist_node_t *n = l->first;	
     while(n){
         strncat(msg, ((struct client_data *)(n->elem))->nickname, 32);
         n = n->next;
@@ -189,8 +190,6 @@ void * client_handle(void* cd){
             return NULL;
         }
     }
-
-    print_all_clients(thread_list);
 
     /* Client accepted, start chat. */
     while(running){
