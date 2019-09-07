@@ -154,7 +154,10 @@ int main(int argc, char *argv[])
     			msg[strlen(msg)-1] = 0;
     			sendMSG(sockfd, CODE_MESSAGE_PUBLIC, msg);	
     			break;
-    			
+	    			printf("Message: ");
+    				fgets(msg, 512, stdin);
+    				msg[strlen(msg)-1] = 0;
+
 
 
     			CODE_MESSAGE_PRIVATE
