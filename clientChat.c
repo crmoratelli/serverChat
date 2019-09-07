@@ -96,8 +96,8 @@ int main(int argc, char *argv[])
     pthread_t thr;
     char msg[512];
     int op;
+    char nick[32];
     
-
     if (argv < 3){
     	printf("Usage: %s <ip> <port> <nickname>\n");
     }
@@ -145,6 +145,19 @@ int main(int argc, char *argv[])
     	scanf("%d", &op);
 
     	switch(op){
+    		case OPTION_LIST_ALL:
+    			sendMSG(sockfd, CODE_LIST_ALL, "");	
+    			break;
+    		case OPTION_SEND_ALL:
+    			printf("Message: ");
+    			fgets(msg, 512, stdin);
+    			msg[strlen(msg)-1] = 0;
+    			sendMSG(sockfd, CODE_MESSAGE_PUBLIC, msg);	
+    			break;
+    			
+
+
+    			CODE_MESSAGE_PRIVATE
 
     	}
 
