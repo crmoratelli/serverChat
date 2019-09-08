@@ -13,6 +13,7 @@
 #include "linkedlist.h"
 
 #define PUBLIC "(PUBLIC) - "
+#define PRIVATE "(PRIVATE) - "
 #define NICKNAMESZ 32
 #define CODE_NICKNAME           100
 #define CODE_MESSAGE_PUBLIC     101  
@@ -24,6 +25,7 @@
 #define CODE_NAME_LIST          107
 #define CODE_ERROR              108
 #define CODE_CLIENT_MESSAGE     109
+#define CODE_KEEPALIVE			110
 
 pthread_mutex_t mutex_list = PTHREAD_MUTEX_INITIALIZER;
 
@@ -115,41 +117,50 @@ int send_private(struct linkedlist_t *l, char *msg){
     char *nick = msg;
     int c = 0;
     char *m;
+    int sz;
 
     while(*msg++ != '|' && c++ < 32);
 
+    *(msg - 1) = 0;
+
     if(c > 32){
-        return 1;
+        return 0;
     }
 
-    *msg++ = 0;
+    sz = strnlen(nick, 32) + strnlen(msg, 512) + strlen(PRIVATE) + 2;
 
     d = lookforNickname(nick, l);
 
     if(d == NULL){
-        return 1;
+        return 0;
     }
 
-    m = malloc(strnlen(msg, 512));
-    strncpy(m, msg, 512);
+    m = malloc(sz);
+    strcpy(m, PRIVATE);
+    strncat(m, nick, 32);
+    strcat(m, ": ");
+    strncat(m, msg, 512);
+
     pthread_mutex_lock(&mutex_list);
     linkedlist_insert_tail(d->msg_list, m);
     pthread_mutex_unlock(&mutex_list);
 
-    return 0;
+    return 1;
 }
 
-void get_list(struct linkedlist_t *l, char *msg){
+void get_list(char *nick, struct linkedlist_t *l, char *msg){
     msg[0] = 0;
 
 	pthread_mutex_lock(&mutex_list);
 	struct linkedlist_node_t *n = l->first;	
     while(n){
-        strncat(msg, ((struct client_data *)(n->elem))->nickname, 32);
-        n = n->next;
-        if(n != NULL){
-            strcat(msg, "|");
+    	if(strncmp(nick, ((struct client_data *)(n->elem))->nickname, 32)){
+        	strncat(msg, ((struct client_data *)(n->elem))->nickname, 32);
         }
+       	n = n->next;
+       	if(n != NULL){
+           	strcat(msg, "|");
+       	}
     }
     pthread_mutex_unlock(&mutex_list);
 }
@@ -160,6 +171,7 @@ void * client_handle(void* cd){
     int running = 1;
     struct pollfd fds[1];
     int rc;
+    int timecount = 0;
 
     memset(fds, 0 , sizeof(fds));
 
@@ -183,6 +195,9 @@ void * client_handle(void* cd){
         if (!lookforNickname(&msg[1], thread_list)){
             strncpy(client->nickname, &msg[1], NICKNAMESZ);
             sendMSG(client->sk, CODE_SUCESS, "");
+            strncpy(msg, client->nickname, 32);
+            strcat(msg, " connected.");
+			send_to_all(thread_list, "Server", msg);    
         }else{ 
             /* Nickname already exist, disconnect client. */
             sendMSG(client->sk, CODE_ERROR, "");
@@ -222,8 +237,11 @@ void * client_handle(void* cd){
                 	running = 0;
                 	break;
             	case CODE_LIST_ALL:
-                	get_list(thread_list, msg);
+                	get_list(client->nickname, thread_list, msg);
                 	sendMSG(client->sk, CODE_NAME_LIST, msg);
+                	break;
+                case CODE_SUCESS:
+                	timecount = 0;
                 	break;
         	}
         }
@@ -236,6 +254,14 @@ void * client_handle(void* cd){
           	print_msg(client->nickname, m);
           	fflush(stdout);
            	free(m);
+      	}
+
+      	timecount++;
+      	if(timecount == 30){
+      		sendMSG(client->sk, CODE_KEEPALIVE, "");
+      	}else if(timecount >= 40){
+           	sendMSG(client->sk, CODE_ERROR, "");
+           	running = 0;
       	}
     }
 

@@ -78,8 +78,11 @@ void * client_handle(void* cd){
       				token = strtok(NULL, "|");            	
       			}
       			break;
-      		case CODE_SUCESS;
+      		case CODE_SUCESS:
       			break;
+            case CODE_NICKNAME_NOT_FOUND:
+	           	printf("Nickname not found.");
+               	break;
             default:
                 printf("Message not recognized %d\n", msg[0]);
                 exit(0);
@@ -106,7 +109,7 @@ int main(int argc, char *argv[])
     struct client_data *cd;
     pthread_t thr;
     char msg[512];
-    int op;
+    char op[12];
     
     if (argc < 4){
     	printf("Usage: %s <ip> <port> <nickname>\n", argv[0]);
@@ -152,9 +155,9 @@ int main(int argc, char *argv[])
 
     while(strcmp(msg, "quit")){
     	print_options();
-    	scanf("%d", &op);
-    	getchar();
-    	switch(op){
+    	fgets(op, 12, stdin);
+    	op[strlen(op)-1] = 0;
+    	switch(atoi(op)){
     		case OPTION_LIST_ALL:
     			sendMSG(sockfd, CODE_LIST_ALL, "");	
     			break;
@@ -181,12 +184,9 @@ int main(int argc, char *argv[])
     		case OPTION_DISCONNECT:
     			sendMSG(sockfd, CODE_DISCONNECT, "");	
     			break;
+
+
     	}
-
-        printf("Send a message: ");
-        fgets(msg, sizeof(msg), stdin);
-
-        sendMSG(sockfd, CODE_MESSAGE_PUBLIC, msg);
     }
 
     
