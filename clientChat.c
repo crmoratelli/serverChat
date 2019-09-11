@@ -110,6 +110,7 @@ int main(int argc, char *argv[])
     pthread_t thr;
     char msg[512];
     char op[12];
+    int running = 1;
     
     if (argc < 4){
     	printf("Usage: %s <ip> <port> <nickname>\n", argv[0]);
@@ -153,7 +154,7 @@ int main(int argc, char *argv[])
     pthread_create(&thr, NULL, client_handle, (void *)cd);
     pthread_detach(thr);
 
-    while(strcmp(msg, "quit")){
+    while(running){
     	print_options();
     	fgets(op, 12, stdin);
     	op[strlen(op)-1] = 0;
@@ -183,8 +184,8 @@ int main(int argc, char *argv[])
     			break;
     		case OPTION_DISCONNECT:
     			sendMSG(sockfd, CODE_DISCONNECT, "");	
+    			running = 0;
     			break;
-
 
     	}
     }

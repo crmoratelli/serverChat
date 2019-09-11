@@ -60,7 +60,7 @@ struct client_data * lookforNickname(char* nickname, struct linkedlist_t *l){
 
     while(n){
         if(!strcmp(nickname, ((struct client_data*)(n->elem))->nickname)){
-            printf("%s %s\n", nickname, ((struct client_data*)(n->elem))->nickname);
+            //printf("%s %s\n", nickname, ((struct client_data*)(n->elem))->nickname);
             return n->elem;
         }
         n = n->next;
@@ -112,7 +112,7 @@ void print_msg(char *n, char *msg){
     printf("%s %d %s\n", n, msg[0], &msg[1]);
 }
 
-int send_private(struct linkedlist_t *l, char *msg){
+int send_private(struct client_data *cd, struct linkedlist_t *l, char *msg){
     struct client_data *d;
     char *nick = msg;
     int c = 0;
@@ -137,7 +137,7 @@ int send_private(struct linkedlist_t *l, char *msg){
 
     m = malloc(sz);
     strcpy(m, PRIVATE);
-    strncat(m, nick, 32);
+    strncat(m, cd->nickname, 32);
     strcat(m, ": ");
     strncat(m, msg, 512);
 
@@ -197,6 +197,7 @@ void * client_handle(void* cd){
             sendMSG(client->sk, CODE_SUCESS, "");
             strncpy(msg, client->nickname, 32);
             strcat(msg, " connected.");
+            printf("%s\n", msg);
 			send_to_all(thread_list, "Server", msg);    
         }else{ 
             /* Nickname already exist, disconnect client. */
@@ -211,22 +212,20 @@ void * client_handle(void* cd){
 
     	 rc = poll(fds, 1, 1000);
 
-    	 printf("%s: %d\n", client->nickname, rc);
-
    		if (rc < 0){
       		perror("  poll() failed");
       		continue;
     	}else if (rc > 0){
 
         	recvMSG(client->sk, msg);
-        	print_msg(client->nickname, msg);
+        	printf("%d %s\n", *msg, &msg[1]);
 
         	switch (msg[0]){
             	case CODE_MESSAGE_PUBLIC:
                 	send_to_all(thread_list, client->nickname, &msg[1]);
                 	break;
             	case CODE_MESSAGE_PRIVATE:
-                	if(send_private(thread_list, &msg[1])){
+                	if(send_private(client, thread_list, &msg[1])){
                     	sendMSG(client->sk, CODE_SUCESS, "");
                 	}else{
                     	sendMSG(client->sk, CODE_NICKNAME_NOT_FOUND, "");
@@ -234,6 +233,10 @@ void * client_handle(void* cd){
                 	break;
             	case CODE_DISCONNECT:
                 	sendMSG(client->sk, CODE_SUCESS, "");
+		            strncpy(msg, client->nickname, 32);
+        		    strcat(msg, " disconnected.");
+					send_to_all(thread_list, "Server", msg);    
+					printf("%s\n", msg);
                 	running = 0;
                 	break;
             	case CODE_LIST_ALL:
@@ -251,7 +254,7 @@ void * client_handle(void* cd){
         	char *m = linkedlist_remove_head(client->msg_list);
         	pthread_mutex_unlock(&mutex_list);
           	sendMSG(client->sk, CODE_CLIENT_MESSAGE, m);
-          	print_msg(client->nickname, m);
+          	//print_msg(client->nickname, m);
           	fflush(stdout);
            	free(m);
       	}
